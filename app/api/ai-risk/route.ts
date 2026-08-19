@@ -1,8 +1,7 @@
-import { generateText } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createGateway, generateText } from 'ai'
 import { NextResponse } from 'next/server'
 
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const gateway = createGateway({ apiKey: process.env.VERCEL_AI_GATEWAY_KEY_2 })
 
 const SYSTEM_PROMPT = `You are an AI workflow security reviewer. Classify the risk of the supplied prompt_template as exactly Low, Medium, or High. Focus on ambiguous or vague instructions about handling data. Return only valid JSON in this shape: {"risk":"Low|Medium|High","reason":"one sentence"}. The reason must be one sentence.`
 
@@ -14,7 +13,7 @@ export async function POST(request: Request) {
     }
 
     const { text } = await generateText({
-      model: openai('gpt-4o-mini'),
+      model: gateway('openai/gpt-4o-mini'),
       system: SYSTEM_PROMPT,
       prompt: prompt_template,
       temperature: 0,
