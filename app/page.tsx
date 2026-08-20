@@ -8,15 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 
-type Config = {
-  workflow_name: string
-  data_sources: string[]
-  tools_called: string[]
-  prompt_template: string
-  output_destination: string
-}
+import { scanConfig, shouldRunAiCheck, type Config, type Issue } from '@/lib/rules'
 
-type Issue = { category: string; title: string; detail: string; severity: 'High' | 'Medium' }
 type AiCheck = { risk: 'Low' | 'Medium' | 'High'; reason: string }
 
 const examples: { name: string; description: string; config: Config; tone: 'clean' | 'warning' }[] = [
@@ -42,33 +35,6 @@ const examples: { name: string; description: string; config: Config; tone: 'clea
 
 const emptyConfig: Config = { workflow_name: '', data_sources: [], tools_called: [], prompt_template: '', output_destination: '' }
 
-function scanConfig(config: Config): Issue[] {
-  const issues: Issue[] = []
-  const prompt = config.prompt_template || ''
-  const pii = [
-    { pattern: /[\\w.+-]+@[\\w-]+\\.[\\w.-]+/i, title: 'Email address detected', detail: 'The prompt contains an email address. Avoid embedding direct identifiers in templates.' },
-    { pattern: /\\b\\d{3}-\\d{2}-\\d{4}\\b/, title: 'Social Security number detected', detail: 'The prompt contains a US SSN pattern. Remove direct identifiers or add an approved redaction step.' },
-    { pattern: /\\b(?:api[_ -]?key|password|secret|token)\\b/i, title: 'Credential-like term detected', detail: 'The prompt references a credential or secret. Keep secrets out of prompts and workflow configs.' },
-  ]
-  pii.forEach((rule) => rule.pattern.test(prompt) && issues.push({ category: 'PII in prompt', title: rule.title, detail: rule.detail, severity: 'High' }))
-  const sensitive = ['employee_records', 'customer_database', 'billing_records', 'health_records', 'medical_data', 'user_profiles']
-  const foundSources = config.data_sources.filter((source) => sensitive.some((term) => source.toLowerCase().includes(term)))
-  if (foundSources.length) issues.push({ category: 'Sensitive data source', title: 'Sensitive source connected', detail: `${foundSources.join(', ')} may contain personal or financial data. Confirm least-privilege access and retention controls.`, severity: 'Medium' })
-  const blocked = ['delete_records', 'execute_shell', 'send_webhook', 'run_sql', 'admin_console', 'external_post']
-  const foundTools = config.tools_called.filter((tool) => blocked.some((term) => tool.toLowerCase().includes(term)))
-  if (foundTools.length) issues.push({ category: 'Disallowed tool', title: 'Blocked tool called', detail: `${foundTools.join(', ')} is on the Guardrail Scanner blocklist because it can create irreversible or external side effects.`, severity: 'High' })
-  const destination = (config.output_destination || '').toLowerCase()
-  const publicDestination = /public|unrestricted|public[_ -]?slack|public[_ -]?webhook|external[_ -]?webhook/.test(destination)
-  if (publicDestination) issues.push({ category: 'Unrestricted destination', title: 'Public destination detected', detail: `${config.output_destination} may expose workflow output to an unrestricted channel or endpoint. Confirm access controls before deployment.`, severity: 'High' })
-  return issues
-}
-
-function shouldRunAiCheck(config: Config, issues: Issue[]) {
-  const prompt = (config.prompt_template || '').toLowerCase()
-  const action = /\b(process|analyze|analyse|review|handle|summarize|use)\b/.test(prompt)
-  const dataReference = /\b(data|records?|customer|user|account|information|documents?|files?|content|responses?)\b/.test(prompt)
-  return issues.length === 0 && action && dataReference
-}
 
 export default function Page() {
   const [configText, setConfigText] = useState(JSON.stringify(examples[0].config, null, 2))
